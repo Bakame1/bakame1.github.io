@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Tic Tac Toe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes pop {
+            0% { transform: scale(0.8); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        
+        .pop {
+            animation: pop 0.3s ease-out;
+        }
+        
+        .cell {
+            transition: all 0.3s ease;
+        }
+        
+        .cell:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+        
+        .winning-cell {
+            background-color: rgba(74, 222, 128, 0.3);
+            box-shadow: 0 0 20px rgba(74, 222, 128, 0.5);
+        }
+        
+        .glow {
+            text-shadow: 0 0 10px currentColor;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+    <audio id="clickSound" src="https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-jump-coin-216.mp3"></audio>
+    <audio id="winSound" src="https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3"></audio>
+    <audio id="drawSound" src="https://assets.mixkit.co/sfx/preview/mixkit-retro-arcade-lose-2027.mp3"></audio>
+    
+    <div class="max-w-2xl w-full text-center fade-in">
+        <h1 class="text-4xl md:text-5xl font-bold mb-2 glow" style="color: #38bdf8;">Tic Tac Toe</h1>
+        <p class="text-lg text-gray-300 mb-8">Choose your game mode</p>
+        
+        <div class="flex justify-center gap-6 mb-10">
+            <button id="singlePlayerBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-lg font-semibold transition-all transform hover:scale-105 flex items-center gap-2">
+                <i class="fas fa-robot"></i> VS Computer
+            </button>
+            <button id="twoPlayerBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg text-lg font-semibold transition-all transform hover:scale-105 flex items-center gap-2">
+                <i class="fas fa-users"></i> 2 Players
+            </button>
+        </div>
+        
+        <div id="gameContainer" class="hidden">
+            <div class="flex justify-between items-center mb-6">
+                <div id="player1" class="bg-blue-600/20 px-4 py-2 rounded-lg border border-blue-600 flex items-center gap-2">
+                    <i class="fas fa-user text-blue-400"></i>
+                    <span class="font-medium">Player X</span>
+                </div>
+                
+                <div id="gameStatus" class="text-xl font-semibold px-4 py-2 rounded-lg bg-gray-800">Your turn</div>
+                
+                <div id="player2" class="bg-purple-600/20 px-4 py-2 rounded-lg border border-purple-600 flex items-center gap-2">
+                    <i id="player2Icon" class="fas fa-robot text-purple-400"></i>
+                    <span class="font-medium">Player O</span>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-3 mx-auto max-w-xs">
+                <!-- Game board cells will be generated here -->
+            </div>
+            
+            <div class="mt-8 flex justify-center gap-4">
+                <button id="restartBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-all">
+                    <i class="fas fa-redo mr-2"></i>Restart
+                </button>
+                <button id="modeSwitchBtn" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-all">
+                    <i class="fas fa-exchange-alt mr-2"></i>Switch Mode
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="resultModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center hidden z-50">
+        <div class="bg-gray-800 rounded-xl p-8 max-w-sm w-full text-center transform transition-all scale-95 opacity-0">
+            <h2 id="resultTitle" class="text-3xl font-bold mb-4"></h2>
+            <p id="resultMessage" class="text-xl mb-6"></p>
+            <div class="flex justify-center gap-4">
+                <button id="playAgainBtn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium">
+                    Play Again
+                </button>
+                <button id="quitBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-medium">
+                    Quit
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Game state variables
+            let board = ['', '', '', '', '', '', '', '', ''];
+            let currentPlayer = 'X';
+            let gameActive = false;
+            let gameMode = ''; // 'single' or 'multi'
+            let isComputerThinking = false;
+            
+            // DOM elements
+            const singlePlayerBtn = document.getElementById('singlePlayerBtn');
+            const twoPlayerBtn = document.getElementById('twoPlayerBtn');
+            const gameContainer = document.getElementById('gameContainer');
+            const gameStatus = document.getElementById('gameStatus');
+            const player2Icon = document.getElementById('player2Icon');
+            const restartBtn = document.getElementById('restartBtn');
+            const modeSwitchBtn = document.getElementById('modeSwitchBtn');
+            const resultModal = document.getElementById('resultModal');
+            const resultTitle = document.getElementById('resultTitle');
+            const resultMessage = document.getElementById('resultMessage');
+            const playAgainBtn = document.getElementById('playAgainBtn');
+            const quitBtn = document.getElementById('quitBtn');
+            const clickSound = document.getElementById('clickSound');
+            const winSound = document.getElementById('winSound');
+            const drawSound = document.getElementById('drawSound');
+            
+            // Initialize the game board
+            const gameBoard = document.querySelector('.grid');
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell', 'w-20', 'h-20', 'bg-gray-800', 'rounded-lg', 'flex', 'items-center', 'justify-center', 'text-4xl', 'font-bold', 'cursor-pointer');
+                cell.dataset.index = i;
+                cell.addEventListener('click', () => handleCellClick(i));
+                gameBoard.appendChild(cell);
+            }
+            
+            // Event listeners
+            singlePlayerBtn.addEventListener('click', () => startGame('single'));
+            twoPlayerBtn.addEventListener('click', () => startGame('multi'));
+            restartBtn.addEventListener('click', restartGame);
+            modeSwitchBtn.addEventListener('click', switchMode);
+            playAgainBtn.addEventListener('click', playAgain);
+            quitBtn.addEventListener('click', quitGame);
+            
+            // Start game with selected mode
+            function startGame(mode) {
+                gameMode = mode;
+                gameActive = true;
+                currentPlayer = 'X';
+                
+                // Update UI
+                gameContainer.classList.remove('hidden');
+                singlePlayerBtn.parentElement.classList.add('hidden');
+                
+                if (mode === 'single') {
+                    player2Icon.className = 'fas fa-robot text-purple-400';
+                    document.getElementById('player2').querySelector('span').textContent = 'Computer';
+                } else {
+                    player2Icon.className = 'fas fa-user text-purple-400';
+                    document.getElementById('player2').querySelector('span').textContent = 'Player O';
+                }
+                
+                updateGameStatus();
+                resetBoard();
+            }
+            
+            // Handle cell click
+            function handleCellClick(index) {
+                if (!gameActive || isComputerThinking || board[index] !== '') return;
+                
+                // Play sound
+                clickSound.currentTime = 0;
+                clickSound.play();
+                
+                // Update board
+                board[index] = currentPlayer;
+                updateBoard();
+                
+                // Check for win or draw
+                if (checkWin()) {
+                    endGame(false);
+                    return;
+                }
+                
+                if (checkDraw()) {
+                    endGame(true);
+                    return;
+                }
+                
+                // Switch player
+                currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+                updateGameStatus();
+                
+                // If single player mode and computer's turn
+                if (gameMode === 'single' && currentPlayer === 'O' && gameActive) {
+                    isComputerThinking = true;
+                    setTimeout(computerMove, 800); // Add slight delay for better UX
+                }
+            }
+            
+            // Computer's move (simple AI)
+            function computerMove() {
+                if (!gameActive) return;
+                
+                // Try to win if possible
+                let move = findWinningMove('O');
+                
+                // Block player if they can win
+                if (move === -1) move = findWinningMove('X');
+                
+                // Choose center if available
+                if (move === -1 && board[4] === '') move = 4;
+                
+                // Choose random corner if available
+                if (move === -1) {
+                    const corners = [0, 2, 6, 8];
+                    const availableCorners = corners.filter(i => board[i] === '');
+                    if (availableCorners.length > 0) {
+                        move = availableCorners[Math.floor(Math.random() * availableCorners.length)];
+                    }
+                }
+                
+                // Choose any available spot
+                if (move === -1) {
+                    const availableSpots = board.map((cell, index) => cell === '' ? index : -1).filter(i => i !== -1);
+                    if (availableSpots.length > 0) {
+                        move = availableSpots[Math.floor(Math.random() * availableSpots.length)];
+                    }
+                }
+                
+                if (move !== -1) {
+                    board[move] = 'O';
+                    updateBoard();
+                    
+                    if (checkWin()) {
+                        endGame(false);
+                        isComputerThinking = false;
+                        return;
+                    }
+                    
+                    if (checkDraw()) {
+                        endGame(true);
+                        isComputerThinking = false;
+                        return;
+                    }
+                    
+                    currentPlayer = 'X';
+                    updateGameStatus();
+                }
+                
+                isComputerThinking = false;
+            }
+            
+            // Find winning move for a player
+            function findWinningMove(player) {
+                for (let i = 0; i < 9; i++) {
+                    if (board[i] === '') {
+                        board[i] = player;
+                        if (checkWin()) {
+                            board[i] = ''; // Reset for actual move
+                            return i;
+                        }
+                        board[i] = '';
+                    }
+                }
+                return -1;
+            }
+            
+            // Check for win
+            function checkWin() {
+                const winPatterns = [
+                    [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
+                    [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
+                    [0, 4, 8], [2, 4, 6]             // diagonals
+                ];
+                
+                for (const pattern of winPatterns) {
+                    const [a, b, c] = pattern;
+                    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                        // Highlight winning cells
+                        pattern.forEach(index => {
+                            document.querySelector(`[data-index="${index}"]`).classList.add('winning-cell');
+                        });
+                        return true;
+                    }
+                }
+                return false;
+            }
+            
+            // Check for draw
+            function checkDraw() {
+                return !board.includes('');
+            }
+            
+            // End the game
+            function endGame(isDraw) {
+                gameActive = false;
+                
+                if (isDraw) {
+                    drawSound.play();
+                    showResult("It's a Draw!", "No one wins this time.");
+                } else {
+                    winSound.play();
+                    const winner = currentPlayer === 'X' ? 
+                        (gameMode === 'single' ? 'You win!' : 'Player X wins!') : 
+                        (gameMode === 'single' ? 'Computer wins!' : 'Player O wins!');
+                    showResult(winner, "Great game!");
+                }
+            }
+            
+            // Update the board UI
+            function updateBoard() {
+                const cells = document.querySelectorAll('.cell');
+                cells.forEach((cell, index) => {
+                    cell.textContent = board[index];
+                    
+                    // Add color based on player
+                    if (board[index] === 'X') {
+                        cell.className = cell.className.replace(/text-[^\s]+/, 'text-blue-400');
+                    } else if (board[index] === 'O') {
+                        cell.className = cell.className.replace(/text-[^\s]+/, 'text-purple-400');
+                    }
+                    
+                    // Add pop animation for new moves
+                    if (board[index] !== '') {
+                        cell.classList.add('pop');
+                        setTimeout(() => cell.classList.remove('pop'), 300);
+                    }
+                });
+            }
+            
+            // Update game status text
+            function updateGameStatus() {
+                if (currentPlayer === 'X') {
+                    gameStatus.textContent = gameMode === 'single' ? 'Your turn' : 'Player X\'s turn';
+                    gameStatus.className = 'text-xl font-semibold px-4 py-2 rounded-lg bg-blue-600/20 border border-blue-600';
+                } else {
+                    gameStatus.textContent = gameMode === 'single' ? 'Computer thinking...' : 'Player O\'s turn';
+                    gameStatus.className = 'text-xl font-semibold px-4 py-2 rounded-lg bg-purple-600/20 border border-purple-600';
+                }
+            }
+            
+            // Reset the board
+            function resetBoard() {
+                board = ['', '', '', '', '', '', '', '', ''];
+                currentPlayer = 'X';
+                gameActive = true;
+                
+                // Clear board UI
+                const cells = document.querySelectorAll('.cell');
+                cells.forEach(cell => {
+                    cell.textContent = '';
+                    cell.className = cell.className.replace(/text-[^\s]+/, '');
+                    cell.classList.remove('winning-cell');
+                });
+                
+                updateGameStatus();
+                
+                // If computer starts first in single player mode
+                if (gameMode === 'single' && currentPlayer === 'O') {
+                    isComputerThinking = true;
+                    setTimeout(computerMove, 800);
+                }
+            }
+            
+            // Restart the game
+            function restartGame() {
+                clickSound.play();
+                resetBoard();
+            }
+            
+            // Switch game mode
+            function switchMode() {
+                clickSound.play();
+                gameContainer.classList.add('hidden');
+                singlePlayerBtn.parentElement.classList.remove('hidden');
+            }
+            
+            // Show result modal
+            function showResult(title, message) {
+                resultTitle.textContent = title;
+                resultMessage.textContent = message;
+                
+                const modalContent = resultModal.querySelector('div');
+                resultModal.classList.remove('hidden');
+                
+                setTimeout(() => {
+                    modalContent.classList.remove('scale-95', 'opacity-0');
+                    modalContent.classList.add('scale-100', 'opacity-100');
+                }, 10);
+            }
+            
+            // Hide result modal
+            function hideResult() {
+                const modalContent = resultModal.querySelector('div');
+                modalContent.classList.add('scale-95', 'opacity-0');
+                modalContent.classList.remove('scale-100', 'opacity-100');
+                
+                setTimeout(() => {
+                    resultModal.classList.add('hidden');
+                }, 300);
+            }
+            
+            // Play again
+            function playAgain() {
+                clickSound.play();
+                hideResult();
+                resetBoard();
+            }
+            
+            // Quit game
+            function quitGame() {
+                clickSound.play();
+                hideResult();
+                gameContainer.classList.add('hidden');
+                singlePlayerBtn.parentElement.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
